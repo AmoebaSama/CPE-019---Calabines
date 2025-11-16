@@ -6,17 +6,19 @@ import numpy as np
 from PIL import Image
 import os
 
+# -------------------
 # Streamlit title
+# -------------------
 st.title("VTuber vs Human Classifier")
 
 # -------------------
 # Paths
 # -------------------
-MODEL_PATH = "vtuber_model.h5"  # Must be in the same folder as app.py
+MODEL_PATH = "vtuber_model.h5"  # Must be in repo
 IMAGE_SIZE = (224, 224)
 
 # -------------------
-# Load Model
+# Load model
 # -------------------
 if os.path.exists(MODEL_PATH):
     model = load_model(MODEL_PATH)
@@ -25,7 +27,7 @@ else:
     st.error(f"Model file not found at {MODEL_PATH}. Please upload vtuber_model.h5 to the repo.")
 
 # -------------------
-# Image Upload and Prediction
+# Image Upload & Prediction
 # -------------------
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
 
