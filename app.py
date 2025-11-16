@@ -2,27 +2,27 @@ import streamlit as st
 import os
 import numpy as np
 from PIL import Image
-from keras.preprocessing.image import ImageDataGenerator
-from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from keras.layers import GlobalAveragePooling2D, Dense
-from keras.models import Model, load_model
-from keras.preprocessing import image
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.preprocessing import image
 
 # -------------------
-# Streamlit title
+# Streamlit Title
 # -------------------
 st.title("VTuber vs Human Classifier (MobileNetV2)")
 
 # -------------------
-# Dataset and model paths
+# Dataset path and model path
 # -------------------
-DATASET_DIR = "dataset"          # Place dataset folder in repo: dataset/human, dataset/vtuber
+DATASET_DIR = "dataset"  # In Streamlit Cloud, place your dataset in a folder named 'dataset'
 MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE = 32
 
 # -------------------
-# Data generator
+# Data generators
 # -------------------
 datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
@@ -32,6 +32,7 @@ datagen = ImageDataGenerator(
     zoom_range=0.15
 )
 
+# Training and validation generators
 train_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
@@ -66,36 +67,36 @@ else:
     st.info("No saved model found. Ready to train a new model.")
 
 # -------------------
-# Train model button
+# Train Model Button
 # -------------------
 if st.button("Train Model"):
-    st.write("Training... This may take a while!")
+    st.write("Training... This may take some time!")
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=10  # Increase epochs if needed
+        epochs=10  # Increase if you want better accuracy
     )
     model.save(MODEL_PATH)
     st.success("Training complete and model saved!")
 
 # -------------------
-# Image upload and prediction
+# Image Upload and Prediction
 # -------------------
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert('RGB')
     st.image(img, caption='Uploaded Image', use_column_width=True)
-
+    
     # Preprocess
     img_array = image.img_to_array(img.resize(IMAGE_SIZE))
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)
-
-    # Predict
+    
+    # Prediction
     pred = model.predict(img_array)[0][0]
     confidence = float(pred)
-
+    
     if confidence >= 0.5:
         st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
     else:
