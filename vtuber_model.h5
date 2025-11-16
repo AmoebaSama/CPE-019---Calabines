@@ -1,0 +1,42 @@
+import streamlit as st
+from keras.models import load_model
+from keras.preprocessing import image
+import numpy as np
+from PIL import Image
+
+# -------------------
+# Streamlit App
+# -------------------
+st.title("VTuber vs Human Classifier")
+
+# -------------------
+# Load Pre-trained Model
+# -------------------
+@st.cache_resource
+def load_vtuber_model():
+    return load_model("vtuber_model.h5")  # Make sure this file is in the same GitHub repo
+
+model = load_vtuber_model()
+
+# -------------------
+# Image Upload and Prediction
+# -------------------
+uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    img = Image.open(uploaded_file).convert('RGB')
+    st.image(img, caption='Uploaded Image', use_column_width=True)
+    
+    # Preprocess image
+    IMAGE_SIZE = (224, 224)
+    img_array = image.img_to_array(img.resize(IMAGE_SIZE)) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    # Prediction
+    pred = model.predict(img_array)[0][0]
+    confidence = float(pred)
+    
+    if confidence >= 0.5:
+        st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
+    else:
+        st.success(f"Predicted: Human (Confidence: {1-confidence:.3f})")
