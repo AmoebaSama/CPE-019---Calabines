@@ -1,40 +1,34 @@
-# app.py
 import streamlit as st
 import os
 import numpy as np
 from PIL import Image
 
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
-from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
 
 # -------------------
-# App title
+# Streamlit App Title
 # -------------------
-st.title("VTuber vs Human Classifier (Grayscale)")
+st.title("VTuber vs Human Classifier (Grayscale Lightweight CNN)")
 
 # -------------------
-# Dataset and model paths
+# Dataset and Model Paths
 # -------------------
-DATASET_DIR = "dataset"  # Folder inside repo root
+DATASET_DIR = "dataset"  # Folder in your repo
 MODEL_PATH = "vtuber_model.h5"
-IMAGE_SIZE = (64, 64)  # smaller size for light model
-BATCH_SIZE = 8  # small batch to reduce memory
+IMAGE_SIZE = (64, 64)
+BATCH_SIZE = 16
+EPOCHS = 5  # small for lightweight model
 
 # -------------------
-# Dataset check
-# -------------------
-if not os.path.exists(DATASET_DIR):
-    st.error(f"Dataset folder not found at {DATASET_DIR}! Upload it to the repo root.")
-    st.stop()
-
-# -------------------
-# Data generators (grayscale)
+# Data Generator (Grayscale)
 # -------------------
 datagen = ImageDataGenerator(
     rescale=1./255,
     validation_split=0.2,
-    horizontal_flip=True
+    horizontal_flip=True,
+    rotation_range=20
 )
 
 train_gen = datagen.flow_from_directory(
@@ -58,9 +52,10 @@ val_gen = datagen.flow_from_directory(
 )
 
 # -------------------
-# Load or build model
+# Build Lightweight CNN
 # -------------------
 if os.path.exists(MODEL_PATH):
+    from tensorflow.keras.models import load_model
     model = load_model(MODEL_PATH)
     st.info("Loaded existing trained model.")
 else:
@@ -70,41 +65,46 @@ else:
         Conv2D(32, (3,3), activation='relu'),
         MaxPooling2D(2,2),
         Flatten(),
-        Dense(32, activation='relu'),
+        Dense(16, activation='relu'),
         Dense(1, activation='sigmoid')
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     st.info("No saved model found. Ready to train a new model.")
 
 # -------------------
-# Train model
+# Train Model Button
 # -------------------
 if st.button("Train Model"):
-    st.write("Training... This may take a few minutes!")
+    st.write("Training... This may take a while!")
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=5  # keep small to reduce file size
+        epochs=EPOCHS
     )
     model.save(MODEL_PATH)
     st.success("Training complete and model saved!")
 
 # -------------------
-# Image upload and prediction
+# Upload and Predict
 # -------------------
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg","jpeg","png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("L")  # grayscale
+    img = Image.open(uploaded_file).convert("L")  # Grayscale
+    img = img.resize(IMAGE_SIZE)
     st.image(img, caption="Uploaded Image", use_column_width=True)
-
-    img_array = img_to_array(img.resize(IMAGE_SIZE))
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
-
+    
+    img_array = img_to_array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    
     pred = model.predict(img_array)[0][0]
 
-    # reverse prediction if needed
-    if pred >= 0.5:
-        st.success(f"Predicted: Human (Confidence: {pred:.3f})")
-    else:
-        st.success(f"Predicted: VTuber (Confidence: {1-pred:.3f})")
+    # -------------------
+    # Reverse prediction if necessary
+    # -------------------
+    # VTuber = cartoonish = 1
+    # Human = realistic = 0
+    label = "VTuber" if pred >= 0.5 else "Human"
+    confidence = pred if pred >= 0.5 else 1 - pred
+    
+    st.success(f"Predicted: {label} (Confidence: {confidence:.3f})")
