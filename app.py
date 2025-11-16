@@ -1,49 +1,98 @@
 import streamlit as st
-import tensorflow as tf
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.preprocessing.image import img_to_array
-from PIL import Image
+from keras.preprocessing.image import ImageDataGenerator
+from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from keras.layers import GlobalAveragePooling2D, Dense
+from keras.models import Model
+from keras.preprocessing import image
 import numpy as np
+from PIL import Image
+import os
 
-# Load lightweight classifier model
-@st.cache_resource
-def load_model():
-    base = MobileNetV2(weights="imagenet", include_top=False, pooling="avg")
-    x = tf.keras.layers.Dense(2, activation="softmax")(base.output)
-    return tf.keras.Model(base.input, x)
+# Streamlit title
+st.title("VTuber vs Human Classifier (MobileNetV2)")
 
-model = load_model()
+# -------------------
+# Mount Google Drive (for Colab only)
+# -------------------
+from google.colab import drive
+drive.mount('/content/drive')
 
-CLASSES = ["Human", "VTuber"]
+# -------------------
+# Dataset path
+# -------------------
+DATASET_DIR = "/content/drive/MyDrive/EMTECH 2 Finals/dataset"
+IMAGE_SIZE = (224, 224)
+BATCH_SIZE = 32
 
-def preprocess(img):
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    img = img.resize((224, 224))
-    arr = img_to_array(img)
-    arr = np.expand_dims(arr, axis=0)
-    arr = preprocess_input(arr)
-    return arr
+# -------------------
+# Data generators
+# -------------------
+datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,
+    validation_split=0.2,
+    horizontal_flip=True,
+    rotation_range=20,
+    zoom_range=0.15
+)
 
-def classify(img):
-    arr = preprocess(img)
-    pred = model.predict(arr)[0]
-    idx = np.argmax(pred)
-    return CLASSES[idx], float(pred[idx])
+train_gen = datagen.flow_from_directory(
+    DATASET_DIR,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='binary',
+    subset='training'
+)
 
-# ===================
-# Streamlit UI
-# ===================
-st.set_page_config(page_title="VTuber Detector", layout="centered")
-st.title("VTuber vs Human Detector")
-st.write("Upload an image below to classify!")
+val_gen = datagen.flow_from_directory(
+    DATASET_DIR,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='binary',
+    subset='validation'
+)
 
-uploaded = st.file_uploader("Choose image", type=["jpg", "jpeg", "png"])
+# -------------------
+# Build Transfer Learning Model
+# -------------------
+base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
+x = GlobalAveragePooling2D()(base_model.output)
+x = Dense(64, activation='relu')(x)
+output = Dense(1, activation='sigmoid')(x)
+model = Model(inputs=base_model.input, outputs=output)
 
-if uploaded:
-    img = Image.open(uploaded)
-    st.image(img, width=300)
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-    label, conf = classify(img)
-    st.subheader(f"Prediction: {label}")
-    st.write(f"Confidence: `{conf:.3f}`")
+# -------------------
+# Train Model Button
+# -------------------
+if st.button("Train Model"):
+    st.write("Training... This may take some time!")
+    history = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=10  # Increase for better accuracy
+    )
+    st.write("Training Complete!")
+
+# -------------------
+# Image Upload and Prediction
+# -------------------
+uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    img = Image.open(uploaded_file).convert('RGB')
+    st.image(img, caption='Uploaded Image', use_column_width=True)
+    
+    # Preprocess
+    img_array = image.img_to_array(img.resize(IMAGE_SIZE))
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array = preprocess_input(img_array)
+    
+    # Prediction
+    pred = model.predict(img_array)[0][0]
+    confidence = float(pred)
+    
+    if confidence >= 0.5:
+        st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
+    else:
+        st.success(f"Predicted: Human (Confidence: {1-confidence:.3f})")
