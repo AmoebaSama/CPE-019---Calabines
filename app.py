@@ -1,4 +1,4 @@
-!pip install streamlit tensorflow pillow
+pip install streamlit tensorflow pillow
 
 # =============================
 # 2️⃣ Import libraries
@@ -66,5 +66,6 @@ if uploaded:
     label, confidence = predict(img)
     st.subheader(f"Prediction: **{label}**")
     st.write(f"Confidence: `{confidence:.3f}`")
+
 
 
