@@ -4,37 +4,35 @@ import numpy as np
 from PIL import Image
 
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 
 # -------------------
 # Streamlit App Title
 # -------------------
-st.title("VTuber vs Human Classifier")
+st.title("VTuber vs Human Classifier (Grayscale CNN)")
 
 # -------------------
 # Dataset and Model Paths
 # -------------------
 DATASET_DIR = "dataset"  # folder in repo
 MODEL_PATH = "vtuber_model.h5"
-IMAGE_SIZE = (224, 224)
+IMAGE_SIZE = (64, 64)  # smaller size for grayscale CNN
 BATCH_SIZE = 16
 
 # -------------------
-# Data Generators
+# Data Generators (Grayscale)
 # -------------------
 datagen = ImageDataGenerator(
-    preprocessing_function=preprocess_input,
+    rescale=1./255,
     validation_split=0.2,
-    horizontal_flip=True,
-    rotation_range=20,
-    zoom_range=0.15
+    horizontal_flip=True
 )
 
 train_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
+    color_mode="grayscale",
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='training',
@@ -44,6 +42,7 @@ train_gen = datagen.flow_from_directory(
 val_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
+    color_mode="grayscale",
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='validation',
@@ -57,13 +56,15 @@ if os.path.exists(MODEL_PATH):
     model = load_model(MODEL_PATH)
     st.info("Loaded existing trained model.")
 else:
-    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
-    base_model.trainable = False  # freeze for small size
-
-    x = GlobalAveragePooling2D()(base_model.output)
-    x = Dense(64, activation='relu')(x)
-    output = Dense(1, activation='sigmoid')(x)
-    model = Model(inputs=base_model.input, outputs=output)
+    model = Sequential([
+        Conv2D(16, (3,3), activation='relu', input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], 1)),
+        MaxPooling2D(2,2),
+        Conv2D(32, (3,3), activation='relu'),
+        MaxPooling2D(2,2),
+        Flatten(),
+        Dense(32, activation='relu'),
+        Dense(1, activation='sigmoid')
+    ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     st.info("No saved model found. Ready to train a new model.")
 
@@ -75,7 +76,7 @@ if st.button("Train Model"):
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=5  # keep small to limit file size
+        epochs=5
     )
     model.save(MODEL_PATH)
     st.success("Training complete and model saved!")
@@ -86,14 +87,13 @@ if st.button("Train Model"):
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")  # ensures 3 channels
+    img = Image.open(uploaded_file).convert("L")  # convert to grayscale
     img = img.resize(IMAGE_SIZE)
     st.image(img, caption="Uploaded Image", use_column_width=True)
 
     # Convert to array
-    img_array = np.array(img, dtype=np.float32)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)
+    img_array = np.array(img, dtype=np.float32)/255.0
+    img_array = np.expand_dims(img_array, axis=(0, -1))  # batch + channel dims
 
     # Predict
     pred = model.predict(img_array, verbose=0)[0][0]
