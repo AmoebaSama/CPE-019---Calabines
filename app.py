@@ -86,17 +86,19 @@ if st.button("Train Model"):
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
+    img = Image.open(uploaded_file).convert("RGB")  # ensure 3 channels
+    img = img.resize(IMAGE_SIZE)  # resize to model input
     st.image(img, caption="Uploaded Image", use_column_width=True)
 
-    img_array = image.img_to_array(img.resize(IMAGE_SIZE))
-    img_array = np.expand_dims(img_array, axis=0)
+    # Convert to array and preprocess
+    img_array = np.array(img)  # shape (224,224,3)
+    img_array = np.expand_dims(img_array, axis=0)  # add batch dimension -> (1,224,224,3)
     img_array = preprocess_input(img_array)
 
     pred = model.predict(img_array)[0][0]
     confidence = float(pred)
 
-    # Use class indices to map prediction
+    # Use class indices to map prediction correctly
     if train_gen.class_indices['vtuber'] == 1:
         if confidence >= 0.5:
             st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
@@ -107,3 +109,5 @@ if uploaded_file:
             st.success(f"Predicted: Human (Confidence: {confidence:.3f})")
         else:
             st.success(f"Predicted: VTuber (Confidence: {1-confidence:.3f})")
+
+
