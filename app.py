@@ -17,7 +17,7 @@ st.title("VTuber vs Human Classifier")
 # -------------------
 # Dataset and Model Paths
 # -------------------
-DATASET_DIR = "dataset"  # This is your repo folder
+DATASET_DIR = "dataset"  # Your repo folder
 MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE = 16
@@ -74,7 +74,7 @@ if st.button("Train Model"):
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=5  # Increase this for better accuracy
+        epochs=5
     )
     model.save(MODEL_PATH)
     st.success("Training complete and model saved!")
@@ -88,12 +88,10 @@ if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
     st.image(img, caption="Uploaded Image", use_column_width=True)
     
-    # Preprocess
     img_array = image.img_to_array(img.resize(IMAGE_SIZE))
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)
     
-    # Prediction
     pred = model.predict(img_array)[0][0]
     confidence = float(pred)
     
