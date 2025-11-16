@@ -1,32 +1,70 @@
+!pip install streamlit tensorflow pillow
+
+# =============================
+# 2️⃣ Import libraries
+# =============================
 import streamlit as st
 import tensorflow as tf
-from PIL import Image, ImageOps
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from tensorflow.keras.preprocessing.image import img_to_array
+from PIL import Image
 import numpy as np
 
-st.title("MNIST Digit Classifier")
-st.write("Upload a 28x28 grayscale handwritten digit image.")
+# =============================
+# 3️⃣ Load pretrained model
+# (MobileNetV2 transfer learning)
+# =============================
+@st.cache_resource
+def load_model():
+    base_model = MobileNetV2(weights="imagenet", include_top=False, pooling="avg")
+    x = tf.keras.layers.Dense(2, activation="softmax")(base_model.output)
+    model = tf.keras.Model(inputs=base_model.input, outputs=x)
+    return model
 
-# Load model
-model = tf.keras.models.load_model("mnist_cnn_model.keras")
+model = load_model()
 
-# Preprocess function
+# =============================
+# 4️⃣ Preprocess image
+# =============================
 def preprocess(img):
-    if img.mode == "RGBA":
+    if img.mode != "RGB":
         img = img.convert("RGB")
-    img = img.convert("L")
-    img = ImageOps.invert(img)
-    img = img.resize((28,28))
-    arr = np.array(img)/255.0
-    arr = arr.reshape(1,28,28,1)
+    img = img.resize((224, 224))
+    arr = img_to_array(img)
+    arr = np.expand_dims(arr, axis=0)
+    arr = preprocess_input(arr)
     return arr
 
-# File uploader
-uploaded = st.file_uploader("Upload a digit image", type=["png","jpg","jpeg"])
+# =============================
+# 5️⃣ Prediction function
+# =============================
+CLASSES = ["Human", "VTuber"]
+
+def predict(img):
+    arr = preprocess(img)
+    pred = model.predict(arr)[0]
+    idx = np.argmax(pred)
+    return CLASSES[idx], pred[idx]
+
+# =============================
+# 6️⃣ STREAMLIT UI
+# =============================
+%%writefile app.py
+import streamlit as st
+from PIL import Image
+from vtuber_classifier import predict
+
+st.title("VTuber vs Human Classifier")
+st.write("Upload an image. The model will determine if it's a VTuber or a real human.")
+
+uploaded = st.file_uploader("Upload a file", type=["png","jpg","jpeg"])
 
 if uploaded:
     img = Image.open(uploaded)
-    st.image(img, caption="Uploaded Image", width=150)
-    arr = preprocess(img)
-    prediction = model.predict(arr)
-    label = np.argmax(prediction)
-    st.write(f"Predicted Digit: **{label}**")
+    st.image(img, caption="Uploaded Image", width=250)
+    
+    label, confidence = predict(img)
+    st.subheader(f"Prediction: **{label}**")
+    st.write(f"Confidence: `{confidence:.3f}`")
+
+
