@@ -1,29 +1,27 @@
-# app.py
 import streamlit as st
 import os
 import numpy as np
 from PIL import Image
 
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
 
 # -------------------
-# Streamlit title
+# Streamlit App Title
 # -------------------
 st.title("VTuber vs Human Classifier")
 
 # -------------------
-# Paths and settings
+# Dataset and Model Paths
 # -------------------
-DATASET_DIR = "dataset"  # make sure this exists in repo
+DATASET_DIR = "dataset"  # folder in repo root
 MODEL_PATH = "vtuber_model.h5"
-IMAGE_SIZE = (64, 64)
+IMAGE_SIZE = (64, 64)  # smaller size for lighter model
 BATCH_SIZE = 16
-COLOR_MODE = "grayscale"  # easier, smaller model
 
 # -------------------
-# Data Generators
+# Data Generators (Grayscale)
 # -------------------
 datagen = ImageDataGenerator(
     rescale=1./255,
@@ -34,29 +32,28 @@ datagen = ImageDataGenerator(
 train_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
+    color_mode="grayscale",
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='training',
-    color_mode=COLOR_MODE,
     shuffle=True
 )
 
 val_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
+    color_mode="grayscale",
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='validation',
-    color_mode=COLOR_MODE,
     shuffle=True
 )
 
 # -------------------
-# Load or create model
+# Load or Build Model
 # -------------------
 if os.path.exists(MODEL_PATH):
     model = load_model(MODEL_PATH)
-    st.info("Loaded existing trained model.")
 else:
     model = Sequential([
         Conv2D(16, (3,3), activation='relu', input_shape=(64,64,1)),
@@ -68,17 +65,16 @@ else:
         Dense(1, activation='sigmoid')
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    st.info("No pre-trained model found. Ready to train a new model.")
 
 # -------------------
-# Train button
+# Train Model Button
 # -------------------
 if st.button("Train Model"):
     st.write("Training... This may take a while!")
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=5
+        epochs=5  # small epoch number for demo
     )
     model.save(MODEL_PATH)
     st.success("Training complete and model saved!")
@@ -86,25 +82,20 @@ if st.button("Train Model"):
 # -------------------
 # Upload and Predict
 # -------------------
-uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg","jpeg","png"])
+uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("L")  # grayscale
+    img = Image.open(uploaded_file).convert("L")  # convert to grayscale
     img = img.resize(IMAGE_SIZE)
     st.image(img, caption="Uploaded Image", use_column_width=True)
     
-    img_array = img_to_array(img)/255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0) / 255.0  # normalize
     
     pred = model.predict(img_array)[0][0]
     
-    # Map prediction using class_indices
-    class_indices = train_gen.class_indices
+    # Reversing the prediction if VTuber=1, Human=0
     if pred >= 0.5:
-        label = [k for k,v in class_indices.items() if v==1][0]
-        confidence = pred
+        st.success(f"Predicted: VTuber (Confidence: {pred:.3f})")
     else:
-        label = [k for k,v in class_indices.items() if v==0][0]
-        confidence = 1 - pred
-        
-    st.success(f"Predicted: {label} (Confidence: {confidence:.3f})")
+        st.success(f"Predicted: Human (Confidence: {1-pred:.3f})")
