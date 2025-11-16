@@ -1,44 +1,95 @@
 import streamlit as st
-import os
-import numpy as np
+from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from keras.layers import GlobalAveragePooling2D, Dense
+from keras.models import Model, load_model
+from keras.preprocessing.image import ImageDataGenerator, img_to_array
 from PIL import Image
+import numpy as np
+import os
 
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model, load_model
+st.title("VTuber vs Human Classifier")
 
-# -------------------
-# Streamlit App Title
-# -------------------
-st.title("VTuber vs Human Classifier (Pre-trained)")
-
-# -------------------
 # Paths
-# -------------------
+DATASET_DIR = "dataset"  # dataset folder in repo root
 MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
+BATCH_SIZE = 16
 
 # -------------------
-# Load Pre-trained Model
+# Data generator
+# -------------------
+datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,
+    validation_split=0.2,
+    horizontal_flip=True,
+    rotation_range=20,
+    zoom_range=0.15
+)
+
+train_gen = datagen.flow_from_directory(
+    DATASET_DIR,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='binary',
+    subset='training',
+    shuffle=True
+)
+
+val_gen = datagen.flow_from_directory(
+    DATASET_DIR,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='binary',
+    subset='validation',
+    shuffle=True
+)
+
+# -------------------
+# Load or build model
 # -------------------
 if os.path.exists(MODEL_PATH):
-    model = load_model(MODEL_PATH)
-    st.success("Loaded pre-trained model successfully!")
+    try:
+        model = load_model(MODEL_PATH)
+        st.success("Loaded pre-trained model.")
+    except Exception as e:
+        st.warning(f"Failed to load model: {e}. Building a new model.")
+        base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        x = GlobalAveragePooling2D()(base_model.output)
+        x = Dense(64, activation='relu')(x)
+        output = Dense(1, activation='sigmoid')(x)
+        model = Model(inputs=base_model.input, outputs=output)
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 else:
-    st.error("Pre-trained model not found! Upload `vtuber_model.h5` in the repo root.")
-    st.stop()  # Stop further execution
+    st.info("Pre-trained model not found. A new model will be created.")
+    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
+    x = GlobalAveragePooling2D()(base_model.output)
+    x = Dense(64, activation='relu')(x)
+    output = Dense(1, activation='sigmoid')(x)
+    model = Model(inputs=base_model.input, outputs=output)
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # -------------------
-# Upload and Predict
+# Train button
 # -------------------
-uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
+if st.button("Train Model"):
+    st.write("Training... This may take some time!")
+    history = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=5
+    )
+    model.save(MODEL_PATH)
+    st.success("Training complete and model saved!")
+
+# -------------------
+# Image upload & prediction
+# -------------------
+uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg","jpeg","png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded Image", use_column_width=True)
-    
-    img_array = image.img_to_array(img.resize(IMAGE_SIZE))
+    img = Image.open(uploaded_file).convert('RGB')
+    st.image(img, caption='Uploaded Image', use_column_width=True)
+    img_array = img_to_array(img.resize(IMAGE_SIZE))
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)
     
