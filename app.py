@@ -6,30 +6,21 @@ from PIL import Image
 import numpy as np
 import os
 
-# -------------------
-# Streamlit title
-# -------------------
 st.title("VTuber vs Human Classifier")
 
-# -------------------
-# Paths and constants
-# -------------------
-MODEL_PATH = "vtuber_model.h5"  # pre-trained model in repo root
+# Path for pre-trained model
+MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
 
-# -------------------
-# Load pre-trained model
-# -------------------
+# Load model if exists
 if os.path.exists(MODEL_PATH):
     model = load_model(MODEL_PATH)
     st.success("Loaded pre-trained model.")
 else:
-    st.error("Pre-trained model not found! Upload vtuber_model.h5 in the repo root.")
+    st.warning("Pre-trained model not found! Upload vtuber_model.h5 in the repo root.")
     st.stop()
 
-# -------------------
-# Image upload and prediction
-# -------------------
+# Upload image for prediction
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg","jpeg","png"])
 if uploaded_file:
     img = Image.open(uploaded_file).convert('RGB')
