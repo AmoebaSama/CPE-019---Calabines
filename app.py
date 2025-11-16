@@ -1,31 +1,28 @@
 import streamlit as st
-from keras.preprocessing.image import ImageDataGenerator
-from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from keras.layers import GlobalAveragePooling2D, Dense
-from keras.models import Model
-from keras.preprocessing import image
 import numpy as np
 from PIL import Image
 import os
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model, load_model
 
-# Streamlit title
+# -------------------
+# Streamlit Title
+# -------------------
 st.title("VTuber vs Human Classifier (MobileNetV2)")
 
 # -------------------
-# Mount Google Drive (for Colab only)
+# Paths & Settings
 # -------------------
-from google.colab import drive
-drive.mount('/content/drive')
-
-# -------------------
-# Dataset path
-# -------------------
-DATASET_DIR = "/content/drive/MyDrive/EMTECH 2 Finals/dataset"
+DATASET_DIR = "dataset"  # relative path in your repo
+MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE = 32
+EPOCHS = 10  # adjust for better training
 
 # -------------------
-# Data generators
+# Data Generators
 # -------------------
 datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
@@ -40,7 +37,8 @@ train_gen = datagen.flow_from_directory(
     target_size=IMAGE_SIZE,
     batch_size=BATCH_SIZE,
     class_mode='binary',
-    subset='training'
+    subset='training',
+    shuffle=True
 )
 
 val_gen = datagen.flow_from_directory(
@@ -48,19 +46,24 @@ val_gen = datagen.flow_from_directory(
     target_size=IMAGE_SIZE,
     batch_size=BATCH_SIZE,
     class_mode='binary',
-    subset='validation'
+    subset='validation',
+    shuffle=False
 )
 
 # -------------------
-# Build Transfer Learning Model
+# Load or Build Model
 # -------------------
-base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
-x = GlobalAveragePooling2D()(base_model.output)
-x = Dense(64, activation='relu')(x)
-output = Dense(1, activation='sigmoid')(x)
-model = Model(inputs=base_model.input, outputs=output)
-
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+if os.path.exists(MODEL_PATH):
+    model = load_model(MODEL_PATH)
+    st.info("Loaded existing trained model.")
+else:
+    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
+    x = GlobalAveragePooling2D()(base_model.output)
+    x = Dense(64, activation='relu')(x)
+    output = Dense(1, activation='sigmoid')(x)
+    model = Model(inputs=base_model.input, outputs=output)
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    st.info("No saved model found. Ready to train a new model.")
 
 # -------------------
 # Train Model Button
@@ -70,28 +73,29 @@ if st.button("Train Model"):
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=10  # Increase for better accuracy
+        epochs=EPOCHS
     )
-    st.write("Training Complete!")
+    model.save(MODEL_PATH)
+    st.success("Training complete and model saved!")
 
 # -------------------
-# Image Upload and Prediction
+# Image Upload & Prediction
 # -------------------
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert('RGB')
     st.image(img, caption='Uploaded Image', use_column_width=True)
-    
+
     # Preprocess
-    img_array = image.img_to_array(img.resize(IMAGE_SIZE))
+    img_array = img_to_array(img.resize(IMAGE_SIZE))
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)
-    
+
     # Prediction
     pred = model.predict(img_array)[0][0]
     confidence = float(pred)
-    
+
     if confidence >= 0.5:
         st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
     else:
