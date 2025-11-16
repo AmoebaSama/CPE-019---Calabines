@@ -1,9 +1,9 @@
 import streamlit as st
-from keras.preprocessing.image import ImageDataGenerator
-from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from keras.layers import GlobalAveragePooling2D, Dense
-from keras.models import Model, load_model
-from keras.preprocessing import image
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.preprocessing import image
 import numpy as np
 from PIL import Image
 import os
@@ -16,8 +16,8 @@ st.title("VTuber vs Human Classifier (MobileNetV2)")
 # -------------------
 # Paths
 # -------------------
-DATASET_DIR = "dataset"  # This folder must be inside your repo
-MODEL_PATH = "vtuber_model.h5"  # The model will be saved/loaded here
+DATASET_DIR = "dataset"  # Must be inside your repo
+MODEL_PATH = "vtuber_model.h5"  # Model will be saved/loaded here
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE = 32
 
