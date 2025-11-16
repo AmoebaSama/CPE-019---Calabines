@@ -1,40 +1,46 @@
+# app.py
 import streamlit as st
 import os
 import numpy as np
 from PIL import Image
+
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.models import Sequential, load_model
 
 # -------------------
-# Streamlit Title
+# App title
 # -------------------
-st.title("VTuber vs Human Classifier (Grayscale, Small Model)")
+st.title("VTuber vs Human Classifier (Grayscale)")
 
 # -------------------
-# Dataset path
+# Dataset and model paths
 # -------------------
-# Change this path if your dataset is elsewhere in Drive
-DATASET_DIR = "/content/drive/MyDrive/EMTECH 2 Finals/dataset"
-IMAGE_SIZE = (128, 128)  # smaller to reduce model size
-BATCH_SIZE = 8           # smaller batch for lightweight model
+DATASET_DIR = "dataset"  # Folder inside repo root
+MODEL_PATH = "vtuber_model.h5"
+IMAGE_SIZE = (64, 64)  # smaller size for light model
+BATCH_SIZE = 8  # small batch to reduce memory
 
 # -------------------
-# Data Generators (Grayscale)
+# Dataset check
+# -------------------
+if not os.path.exists(DATASET_DIR):
+    st.error(f"Dataset folder not found at {DATASET_DIR}! Upload it to the repo root.")
+    st.stop()
+
+# -------------------
+# Data generators (grayscale)
 # -------------------
 datagen = ImageDataGenerator(
-    preprocessing_function=preprocess_input,
+    rescale=1./255,
     validation_split=0.2,
-    horizontal_flip=True,
-    rotation_range=10,
-    zoom_range=0.1
+    horizontal_flip=True
 )
 
 train_gen = datagen.flow_from_directory(
     DATASET_DIR,
     target_size=IMAGE_SIZE,
-    color_mode='grayscale',  # use grayscale to reduce complexity
+    color_mode='grayscale',
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='training',
@@ -52,47 +58,53 @@ val_gen = datagen.flow_from_directory(
 )
 
 # -------------------
-# Build small MobileNetV2-based model
+# Load or build model
 # -------------------
-base_model = MobileNetV2(weights=None, include_top=False, input_shape=(128,128,1))  # grayscale channel
-x = GlobalAveragePooling2D()(base_model.output)
-x = Dense(32, activation='relu')(x)
-output = Dense(1, activation='sigmoid')(x)
-model = Model(inputs=base_model.input, outputs=output)
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-st.info("Model ready. You can train or upload an image to predict.")
+if os.path.exists(MODEL_PATH):
+    model = load_model(MODEL_PATH)
+    st.info("Loaded existing trained model.")
+else:
+    model = Sequential([
+        Conv2D(16, (3,3), activation='relu', input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], 1)),
+        MaxPooling2D(2,2),
+        Conv2D(32, (3,3), activation='relu'),
+        MaxPooling2D(2,2),
+        Flatten(),
+        Dense(32, activation='relu'),
+        Dense(1, activation='sigmoid')
+    ])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    st.info("No saved model found. Ready to train a new model.")
 
 # -------------------
-# Train Button
+# Train model
 # -------------------
 if st.button("Train Model"):
-    st.write("Training... This may take a few minutes.")
+    st.write("Training... This may take a few minutes!")
     history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=3  # small number for testing
+        epochs=5  # keep small to reduce file size
     )
-    st.success("Training complete!")
+    model.save(MODEL_PATH)
+    st.success("Training complete and model saved!")
 
 # -------------------
-# Upload and Predict
+# Image upload and prediction
 # -------------------
-uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg","jpeg","png"])
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("L")  # convert to grayscale
+    img = Image.open(uploaded_file).convert("L")  # grayscale
     st.image(img, caption="Uploaded Image", use_column_width=True)
-    
+
     img_array = img_to_array(img.resize(IMAGE_SIZE))
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)
-    
+    img_array = np.expand_dims(img_array, axis=0) / 255.0
+
     pred = model.predict(img_array)[0][0]
-    confidence = float(pred)
-    
-    # Reverse prediction if necessary
-    if confidence >= 0.5:
-        st.success(f"Predicted: Human (Confidence: {confidence:.3f})")
+
+    # reverse prediction if needed
+    if pred >= 0.5:
+        st.success(f"Predicted: Human (Confidence: {pred:.3f})")
     else:
-        st.success(f"Predicted: VTuber (Confidence: {1-confidence:.3f})")
+        st.success(f"Predicted: VTuber (Confidence: {1-pred:.3f})")
