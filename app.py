@@ -2,81 +2,25 @@ import streamlit as st
 import os
 import numpy as np
 from PIL import Image
-
 from tensorflow.keras.preprocessing import image
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.models import load_model
 
-# -------------------
-# Streamlit App Title
-# -------------------
 st.title("VTuber vs Human Classifier")
 
-# -------------------
-# Dataset Path
-# -------------------
-DATASET_DIR = "dataset"  # Your repo folder
+# Paths
+MODEL_PATH = "vtuber_model.h5"
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 16
 
-# -------------------
-# Data Generators
-# -------------------
-datagen = ImageDataGenerator(
-    preprocessing_function=preprocess_input,
-    validation_split=0.2,
-    horizontal_flip=True,
-    rotation_range=20,
-    zoom_range=0.15
-)
+# Load pre-trained model
+if os.path.exists(MODEL_PATH):
+    model = load_model(MODEL_PATH)
+    st.success("Loaded pre-trained model.")
+else:
+    st.error("Pre-trained model not found! Upload 'vtuber_model.h5' in the repo root.")
+    st.stop()
 
-train_gen = datagen.flow_from_directory(
-    DATASET_DIR,
-    target_size=IMAGE_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='binary',
-    subset='training',
-    shuffle=True
-)
-
-val_gen = datagen.flow_from_directory(
-    DATASET_DIR,
-    target_size=IMAGE_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='binary',
-    subset='validation',
-    shuffle=True
-)
-
-# -------------------
-# Build MobileNetV2 Model
-# -------------------
-base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
-x = GlobalAveragePooling2D()(base_model.output)
-x = Dense(64, activation='relu')(x)
-output = Dense(1, activation='sigmoid')(x)
-model = Model(inputs=base_model.input, outputs=output)
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-st.info("Model ready. Train it using the button below.")
-
-# -------------------
-# Train Model Button
-# -------------------
-if st.button("Train Model"):
-    st.write("Training... This may take a while!")
-    history = model.fit(
-        train_gen,
-        validation_data=val_gen,
-        epochs=5  # You can increase for better accuracy
-    )
-    st.success("Training complete!")
-
-# -------------------
-# Upload and Predict
-# -------------------
+# Upload image
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
@@ -88,9 +32,10 @@ if uploaded_file:
     img_array = preprocess_input(img_array)
     
     pred = model.predict(img_array)[0][0]
+    confidence = float(pred)
     
-    # Flip prediction so Human = True if >= 0.5
-    if pred >= 0.5:
-        st.success(f"Predicted: Human (Confidence: {pred:.3f})")
+    # Reverse predictions if needed
+    if confidence >= 0.5:
+        st.success(f"Predicted: Human (Confidence: {confidence:.3f})")
     else:
-        st.success(f"Predicted: VTuber (Confidence: {1-pred:.3f})")
+        st.success(f"Predicted: VTuber (Confidence: {1-confidence:.3f})")
