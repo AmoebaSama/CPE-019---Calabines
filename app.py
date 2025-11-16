@@ -1,102 +1,47 @@
 import streamlit as st
-import os
+from tensorflow.keras.models import load_model
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.preprocessing import image
 import numpy as np
 from PIL import Image
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.preprocessing import image
+import os
+
+# Streamlit title
+st.title("VTuber vs Human Classifier")
 
 # -------------------
-# Streamlit Title
+# Paths
 # -------------------
-st.title("VTuber vs Human Classifier (MobileNetV2)")
-
-# -------------------
-# Dataset path and model path
-# -------------------
-DATASET_DIR = "dataset"  # In Streamlit Cloud, place your dataset in a folder named 'dataset'
-MODEL_PATH = "vtuber_model.h5"
+MODEL_PATH = "vtuber_model.h5"  # Must be in the same folder as app.py
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 32
 
 # -------------------
-# Data generators
-# -------------------
-datagen = ImageDataGenerator(
-    preprocessing_function=preprocess_input,
-    validation_split=0.2,
-    horizontal_flip=True,
-    rotation_range=20,
-    zoom_range=0.15
-)
-
-# Training and validation generators
-train_gen = datagen.flow_from_directory(
-    DATASET_DIR,
-    target_size=IMAGE_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='binary',
-    subset='training',
-    shuffle=True
-)
-
-val_gen = datagen.flow_from_directory(
-    DATASET_DIR,
-    target_size=IMAGE_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='binary',
-    subset='validation',
-    shuffle=True
-)
-
-# -------------------
-# Load or build model
+# Load Model
 # -------------------
 if os.path.exists(MODEL_PATH):
     model = load_model(MODEL_PATH)
-    st.info("Loaded existing trained model.")
+    st.success("Loaded trained model!")
 else:
-    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
-    x = GlobalAveragePooling2D()(base_model.output)
-    x = Dense(64, activation='relu')(x)
-    output = Dense(1, activation='sigmoid')(x)
-    model = Model(inputs=base_model.input, outputs=output)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    st.info("No saved model found. Ready to train a new model.")
-
-# -------------------
-# Train Model Button
-# -------------------
-if st.button("Train Model"):
-    st.write("Training... This may take some time!")
-    history = model.fit(
-        train_gen,
-        validation_data=val_gen,
-        epochs=10  # Increase if you want better accuracy
-    )
-    model.save(MODEL_PATH)
-    st.success("Training complete and model saved!")
+    st.error(f"Model file not found at {MODEL_PATH}. Please upload vtuber_model.h5 to the repo.")
 
 # -------------------
 # Image Upload and Prediction
 # -------------------
 uploaded_file = st.file_uploader("Upload an image to classify", type=["jpg", "png", "jpeg"])
 
-if uploaded_file:
+if uploaded_file and os.path.exists(MODEL_PATH):
     img = Image.open(uploaded_file).convert('RGB')
     st.image(img, caption='Uploaded Image', use_column_width=True)
-    
+
     # Preprocess
     img_array = image.img_to_array(img.resize(IMAGE_SIZE))
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)
-    
+
     # Prediction
     pred = model.predict(img_array)[0][0]
     confidence = float(pred)
-    
+
     if confidence >= 0.5:
         st.success(f"Predicted: VTuber (Confidence: {confidence:.3f})")
     else:
