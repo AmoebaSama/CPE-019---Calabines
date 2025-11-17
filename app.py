@@ -16,10 +16,13 @@ st.write("""
 1. Upload an image of either a **Human** or a **VTuber**.
 2. You may use sample images here:  
    🔗 https://drive.google.com/drive/folders/1Yi9iDOr0HRudf-E_EXMmkgGg85RrvV8C?usp=sharing  
-3. See if the image that you have uploaded is a **Human** or a **VTuber**.
-P.S. The uploaded image will be grayscaled.
-Created by: **Calabines, Ayden Jarrick J.**
+
+3. See if the uploaded image is classified as Human or VTuber.  
+
+**P.S.** The uploaded image will be converted to grayscale.  
+**Created by:** Calabines, Ayden Jarrick J.
 """)
+
 
 # -------------------
 # Dataset and Model Paths
@@ -56,4 +59,5 @@ if uploaded_file:
         st.success(f"Predicted: VTuber (Confidence: {pred:.3f})")
     else:
         st.success(f"Predicted: Human (Confidence: {1-pred:.3f})")
+
 
