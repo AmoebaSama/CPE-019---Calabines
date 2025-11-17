@@ -11,6 +11,14 @@ from tensorflow.keras.preprocessing.image import img_to_array
 # -------------------
 st.title("VTuber vs Human Classifier")
 
+st.write("""
+### How to use:
+1. Upload an image of either a **Human** or a **VTuber**.
+2. You may use sample images here:  
+   🔗 https://drive.google.com/drive/folders/1Yi9iDOr0HRudf-E_EXMmkgGg85RrvV8C?usp=sharing  
+3. Created by: **Calabines, Ayden Jarrick J.**
+""")
+
 # -------------------
 # Dataset and Model Paths
 # -------------------
